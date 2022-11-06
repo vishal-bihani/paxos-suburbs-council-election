@@ -3,7 +3,7 @@
   "name": "Member 4",
   "initProposeDelay": 0,
   "port": 8084,
-  "responseTiming": "IMMEDIATE",
+  "responseTiming": "MEDIUM",
   "profile": "FOLLOWER",
   "members": [
     {
@@ -46,6 +46,27 @@
       "name": "Member 6",
       "rank": 6,
       "port": 8086,
+      "host": "127.0.0.1"
+    },
+    {
+      "id": 7,
+      "name": "Member 7",
+      "rank": 7,
+      "port": 8087,
+      "host": "127.0.0.1"
+    },
+    {
+      "id": 8,
+      "name": "Member 8",
+      "rank": 8,
+      "port": 8088,
+      "host": "127.0.0.1"
+    },
+    {
+      "id": 9,
+      "name": "Member 9",
+      "rank": 9,
+      "port": 8089,
       "host": "127.0.0.1"
     }
   ]

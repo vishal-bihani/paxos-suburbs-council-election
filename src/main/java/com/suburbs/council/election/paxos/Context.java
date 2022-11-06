@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.suburbs.council.election.Member;
 import com.suburbs.council.election.Node;
+import com.suburbs.council.election.enums.ResponseTiming;
 import com.suburbs.council.election.messages.HeartBeat;
 import com.suburbs.council.election.messages.Prepare;
 import com.suburbs.council.election.paxos.service.MonitoringService;
@@ -283,5 +284,9 @@ public class Context {
 
     public int getInitProposeDelay() {
         return node.getInitProposeDelay();
+    }
+
+    public ResponseTiming getResponseTiming() {
+        return node.getResponseTiming();
     }
 }

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.suburbs.council.election.Member;
 import com.suburbs.council.election.messages.Message;
+import com.suburbs.council.election.paxos.Candidate;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
@@ -74,14 +76,17 @@ public class PaxosUtils {
     }
 
     /**
-     * This generates higher identifier than existing one for PREPARE message.
+     * This generates higher identifier than existing one for PREPARE message. It will
+     * add random number as per {@link com.suburbs.council.election.paxos.Candidate#MAX_PREPARE_ID_ADD}
+     * and {@link com.suburbs.council.election.paxos.Candidate#MIN_PREPARE_ID_ADD}.
      *
      * @param lastPrepareMessageNumber Number of last PREPARE message
      * @param proposerNodeId Id of the current node
      * @return Formatted identifier for PREPARE message
      */
     public static String generatePrepareNumber(long lastPrepareMessageNumber, int proposerNodeId) {
-        return (lastPrepareMessageNumber + 1) + "." + proposerNodeId;
+        int salt = generateRandomNumber(Candidate.MAX_PREPARE_ID_ADD, Candidate.MIN_PREPARE_ID_ADD);
+        return (lastPrepareMessageNumber + salt) + "." + proposerNodeId;
     }
 
     /**
@@ -103,5 +108,16 @@ public class PaxosUtils {
         PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
         out.println(message);
         out.close(); // This will release the resources
+    }
+
+    /**
+     * Generates random number in the given range.
+     *
+     * @param max Max
+     * @param min Min
+     * @return Random number
+     */
+    public static int generateRandomNumber(int max, int min) {
+        return (int) ((Math.random() * (max - min)) + min);
     }
 }

@@ -1,6 +1,7 @@
 package com.suburbs.council.election.paxos;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.suburbs.council.election.enums.ResponseTiming;
 import com.suburbs.council.election.messages.*;
 import com.suburbs.council.election.utils.PaxosUtils;
 import java.io.IOException;
@@ -16,6 +17,7 @@ public class Follower extends PaxosMember {
     private static final Logger log = LoggerFactory.getLogger(Follower.class);
 
     private final Context context;
+    private final ResponseTiming responseTiming;
     private final BlockingQueue<String> receivedMessages;
 
     /**
@@ -26,6 +28,7 @@ public class Follower extends PaxosMember {
     public Follower(Context context) {
         this.context = context;
         this.receivedMessages = context.getReceivedMessages();
+        this.responseTiming = context.getResponseTiming();
     }
 
     @Override
@@ -40,6 +43,11 @@ public class Follower extends PaxosMember {
      */
     private void handleRequests() {
         while(!receivedMessages.isEmpty()) {
+
+            // If response timing is set to be either of MEDIUM, LATE, NEVER, the thread
+            // will sleep for that much of time
+            delayResponseIfConfigured();
+
             try {
                 String message = receivedMessages.poll();
                 Message.Type messageType;
@@ -68,6 +76,29 @@ public class Follower extends PaxosMember {
     }
 
     /**
+     * Delays the execution as per the configuration of {@link ResponseTiming}
+     * in {@link com.suburbs.council.election.Node}.
+     */
+    private void delayResponseIfConfigured() {
+        long responseDelay = responseTiming.getResponseDelay();
+
+        if (responseDelay > 0) {
+            try {
+                log.info("[{}]: Response timing configured as {}. Delaying response for {} ms",
+                        context.getNodeName(),
+                        responseTiming,
+                        responseDelay);
+
+                Thread.sleep(responseDelay);
+//                receivedMessages.clear();
+
+            } catch (InterruptedException e) {
+                log.error("[{}]: Delay interrupted", context.getNodeName());
+            }
+        }
+    }
+
+    /**
      * Handles {@link Prepare} messages received from Proposer.
      *
      * @param message Prepare message
@@ -75,8 +106,8 @@ public class Follower extends PaxosMember {
      */
     public void handlePrepareMessage(String message) throws JsonProcessingException {
         Prepare prepare = PaxosUtils.deserialize(message, Prepare.class);
-        log.info("[{}]: Received prepare message from member: {}",
-                context.getNodeName(), prepare.getProposerNodeName());
+        log.info("[{}]: Received prepare message from member: {} with id: {}",
+                context.getNodeName(), prepare.getProposerNodeName(), prepare.getNewPrepareMessageId());
 
         long prepareMessageId = PaxosUtils.parsePrepareNumer(
                 prepare.getNewPrepareMessageId()
@@ -89,7 +120,7 @@ public class Follower extends PaxosMember {
             // send a REJECT message.
 
             Reject reject = new Reject(context, context.getLastPrepareMessageId(), prepare.getNewPrepareMessageId());
-            log.info("[{}]: Prepare message id {} is lower than existing message id {}, thus will be rejected",
+            log.info("[{}]: Prepare message id {} is not higher than existing message id {}, thus will be rejected",
                     context.getNodeName(),
                     prepare.getNewPrepareMessageId(),
                     context.getLastPrepareMessageId());
@@ -129,8 +160,11 @@ public class Follower extends PaxosMember {
                         return;
                     }
                     try {
-                        log.info("[{}]: Dispatching REJECT message to {}", context.getNodeName(),
-                                member.getName());
+                        log.info("[{}]: Dispatching REJECT message to {} for id: {}",
+                                context.getNodeName(),
+                                member.getName(),
+                                reject.getProposedPrepareMessageId());
+
                         PaxosUtils.dispatch(member, reject);
 
                     } catch (IOException e) {
@@ -153,8 +187,11 @@ public class Follower extends PaxosMember {
                         return;
                     }
                     try {
-                        log.info("[{}]: Dispatching PROMISE message to {}", context.getNodeName(),
-                                member.getName());
+                        log.info("[{}]: Dispatching PROMISE message to {} for id: {}",
+                                context.getNodeName(),
+                                member.getName(),
+                                promise.getPrepareMessageId());
+
                         PaxosUtils.dispatch(member, promise);
 
                     } catch (IOException e) {
@@ -172,8 +209,8 @@ public class Follower extends PaxosMember {
      */
     public void handleAcceptMessage(String message) throws JsonProcessingException {
         Accept accept = PaxosUtils.deserialize(message, Accept.class);
-        log.info("[{}]: Received accept message from member: {}",
-                context.getNodeName(), accept.getProposerNodeName());
+        log.info("[{}]: Received accept message from member: {} for id: {}",
+                context.getNodeName(), accept.getProposerNodeName(), accept.getPrepareMessageId());
 
         // Check if the accept message is for last proposed prepare message
         if (!accept.getPrepareMessageId().equals(context.getLastPrepareMessageIdWithNodeId())) {
@@ -219,8 +256,11 @@ public class Follower extends PaxosMember {
         context.getMembers()
                 .forEach(member -> {
                     try {
-                        log.info("[{}]: Dispatching ACCEPTED message to {}", context.getNodeName(),
-                                member.getName());
+                        log.info("[{}]: Dispatching ACCEPTED message to {} for id: {}",
+                                context.getNodeName(),
+                                member.getName(),
+                                accepted.getPrepareMessageId());
+
                         PaxosUtils.dispatch(member, accepted);
 
                     } catch (IOException e) {
@@ -238,8 +278,8 @@ public class Follower extends PaxosMember {
      */
     public void handleAcceptedMessage(String message) throws JsonProcessingException {
         Accepted accepted = PaxosUtils.deserialize(message, Accepted.class);
-        log.info("[{}]: Received ACCEPTED message from member: {}",
-                context.getNodeName(), accepted.getResponderNodeName());
+        log.info("[{}]: Received ACCEPTED message from member: {} for id: {}",
+                context.getNodeName(), accepted.getResponderNodeName(), accepted.getPrepareMessageId());
 
         // Parse the identifier
         long prepareMessageId = PaxosUtils.parsePrepareNumer(

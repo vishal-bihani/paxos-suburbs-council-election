@@ -48,13 +48,16 @@ public class MonitoringService extends Thread {
                 try {
                     Thread.sleep(30000);
                     isFirstTime = false;
+
                 } catch (InterruptedException e) {
-                    log.error("Error");
+                    log.error("[{}], Sleeping thread interrupted", context.getNodeName());
                 }
+
             } else {
 
                 // Print the state information
-                log.info("[{}]: Current state: {}", context.getNodeName(), context.getCurrentState());
+                log.info("[{}]: ----------------------------> Current state: {}",
+                        context.getNodeName(), context.getCurrentState());
             }
 
 
@@ -127,7 +130,7 @@ public class MonitoringService extends Thread {
         List<HeartBeat> messages = context.pollHeartBeatMessage();
         if (messages.isEmpty()) return;
 
-        messages.forEach(heartbeat -> log.info("[{}]: Received heartbeat from member {}",
+        messages.forEach(heartbeat -> log.trace("[{}]: Received heartbeat from member {}",
                 context.getNodeName(),
                 (heartbeat).getName())
         );

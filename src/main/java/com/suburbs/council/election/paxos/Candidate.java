@@ -1,12 +1,12 @@
 package com.suburbs.council.election.paxos;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.suburbs.council.election.enums.ResponseTiming;
 import com.suburbs.council.election.messages.*;
 import com.suburbs.council.election.utils.PaxosUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.time.Instant;
 import java.util.concurrent.BlockingQueue;
 
@@ -16,11 +16,15 @@ import java.util.concurrent.BlockingQueue;
  */
 public class Candidate extends Follower {
     private static final Logger log = LoggerFactory.getLogger(Candidate.class);
-    private static final int MAX_INTERVAL = 20;
-    private static final int MIN_INTERVAL = 10;
+    private static final int MAX_INTERVAL = 120;
+    private static final int MIN_INTERVAL = 60;
+    public static final int MAX_PREPARE_ID_ADD = 10;
+    public static final int MIN_PREPARE_ID_ADD = 5;
+
 
     private final Context context;
     private long resetStartTime;
+    private final ResponseTiming responseTiming;
     private int intervalBetweenInitiatingElection;
     private final BlockingQueue<String> receivedMessages;
 
@@ -37,6 +41,7 @@ public class Candidate extends Follower {
                 .getEpochSecond();
 
         this.receivedMessages = context.getReceivedMessages();
+        this.responseTiming = context.getResponseTiming();
     }
 
     @Override
@@ -61,6 +66,10 @@ public class Candidate extends Follower {
     private void handleRequests() {
         while(!receivedMessages.isEmpty()) {
 
+            // If response timing is set to be either of MEDIUM, LATE, NEVER, the thread
+            // will sleep for that much of time
+            delayResponseIfConfigured();
+
             try {
 
                 String message = receivedMessages.poll();
@@ -81,11 +90,35 @@ public class Candidate extends Follower {
                     case ACCEPTED -> handleAcceptedMessage(message);
                     case PREPARE -> handlePrepareMessage(message);
                     case ACCEPT -> handleAcceptMessage(message);
+                    case REJECT -> handleRejectMessage(message);
                 }
 
             } catch (Exception e) {
                 log.error("[{}]: Error handling message with exception: {}",
                         context.getNodeName(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Delays the execution as per the configuration of {@link ResponseTiming}
+     * in {@link com.suburbs.council.election.Node}.
+     */
+    private void delayResponseIfConfigured() {
+        long responseDelay = responseTiming.getResponseDelay();
+
+        if (responseDelay > 0) {
+            try {
+                log.info("[{}]: Response timing configured as {}. Delaying response for {} ms",
+                        context.getNodeName(),
+                        responseTiming,
+                        responseDelay);
+
+                Thread.sleep(responseDelay);
+//                receivedMessages.clear();
+
+            } catch (InterruptedException e) {
+                log.error("[{}]: Delay interrupted", context.getNodeName());
             }
         }
     }
@@ -98,8 +131,8 @@ public class Candidate extends Follower {
      */
     private void handlePromiseMessages(String message) throws JsonProcessingException {
         Promise promise = PaxosUtils.deserialize(message, Promise.class);
-        log.info("[{}]: Received promise message from member: {}",
-                context.getNodeName(), promise.getResponderNodeName());
+        log.info("[{}]: Received promise message from member: {} for id: {}",
+                context.getNodeName(), promise.getResponderNodeName(), promise.getPrepareMessageId());
 
         // Parse the identifier
         long promiseMessageId = PaxosUtils.parsePrepareNumer(
@@ -127,7 +160,9 @@ public class Candidate extends Follower {
             return;
         }
 
-        log.info("Majority promises received, time to dispatch accept messages");
+        log.info("Majority promises received for id: {}, time to dispatch accept messages",
+                promise.getPrepareMessageId());
+
         Accept accept = new Accept(context, promise.getPrepareMessageId());
         broadcastAcceptMessage(accept);
     }
@@ -153,35 +188,6 @@ public class Candidate extends Follower {
     }
 
     /**
-     * Handles all the {@link Accepted} messages received from the members.
-     *
-     * @param message Accept message
-     * @throws JsonProcessingException Throws if encounters any error while deserialization
-     */
-//    private void handleAcceptedMessage(String message) throws JsonProcessingException {
-//        Accepted accepted = PaxosUtils.deserialize(message, Accepted.class);
-//        log.info("[{}]: Received ACCEPTED message from member: {}",
-//                context.getNodeName(), accepted.getResponderNodeName());
-//
-//        // Parse the identifier
-//        long prepareMessageId = PaxosUtils.parsePrepareNumer(
-//                accepted.getPrepareMessageId()
-//        );
-//
-//        // Increment total no. of votes for the identifier
-//        context.incrementVotesForPrepare(prepareMessageId);
-//
-//        // Check if Majority is achieved. If yes, update the state
-//        if (context.isMajorityVotesReceived(prepareMessageId)) {
-//            context.updateState(
-//                    accepted.getProposedPrepareMessage()
-//                            .getProposal()
-//                            .getProposedMessage()
-//            );
-//        }
-//    }
-
-    /**
      * Broadcast the {@link Prepare} message to all the members.
      *
      * @param prepare Prepare message to broadcast
@@ -190,8 +196,11 @@ public class Candidate extends Follower {
         context.getMembers()
                 .forEach(member -> {
                     try {
-                        log.info("[{}]: Dispatching PREPARE message to {}", context.getNodeName(),
-                                member.getName());
+                        log.info("[{}]: Dispatching PREPARE message to {} with id: {}",
+                                context.getNodeName(),
+                                member.getName(),
+                                prepare.getNewPrepareMessageId());
+
                         PaxosUtils.dispatch(member, prepare);
 
                     } catch (IOException e) {
@@ -233,31 +242,38 @@ public class Candidate extends Follower {
         }
     }
 
-    private void dispatchPrepareMessagesToMembers() throws JsonProcessingException {
-        Prepare prepare = new Prepare(context);
-        Long prepareMessageId = PaxosUtils.parsePrepareNumer(
-                prepare.getNewPrepareMessageId()
-        );
-        String serializedPrepare = PaxosUtils.serialize(prepare);
-        context.savePrepareMessage(prepareMessageId, prepare);
+    /**
+     * Handles {@link Reject} message.
+     *
+     * @param message Reject message
+     */
+    private void handleRejectMessage(String message) throws JsonProcessingException {
+        Reject reject = PaxosUtils.deserialize(message, Reject.class);
+        log.info("[{}]: Received REJECT message from member: {} for id: {}",
+                context.getNodeName(), reject.getResponderNodeId(), reject.getProposedPrepareMessageId());
 
-        log.info("[{}]: Dispatching prepare messages to all members", context.getNodeName());
-        context.getMembers()
-                .forEach(member -> {
-                    PrintWriter out = null;
-                    try {
-                        out = new PrintWriter(member.socket().getOutputStream(), true);
+        // Check if this regarding current node's stored PREPARE message id.
+        if (context.getLastPrepareMessageIdWithNodeId().equals(reject.getProposedPrepareMessageId())) {
+            // This is regarding the correct proposed id.
+            // Update the state.
 
-                    } catch (IOException e) {
-                        log.error("[{}]: Error while dispatching prepare messages -> {}",
-                                context.getNodeName(), e.getMessage());
-                    }
-                    out.println(serializedPrepare);
-                    out.close();
-                });
+            context.setLastPrepareMessageId(
+                    reject.getCurrentPrepareMessageId()
+            );
+            context.setLastPrepareMessageIdWithNodeId(
+                    PaxosUtils.generatePrepareNumber(
+                            reject.getCurrentPrepareMessageId(), reject.getResponderNodeId()
+                    )
+            );
+        }
     }
 
+    /**
+     * Generates random interval between elections.
+     *
+     * @return Random interval
+     */
     private int generateRandomIntervalBetweenElections() {
-        return (int) ((Math.random() * (MAX_INTERVAL - MIN_INTERVAL)) + MIN_INTERVAL);
+        return PaxosUtils.generateRandomNumber(MAX_INTERVAL, MIN_INTERVAL);
     }
 }

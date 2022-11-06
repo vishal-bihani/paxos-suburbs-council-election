@@ -46,7 +46,6 @@ public class PaxosDriver {
                                 nodeMember.getName(),
                                 nodeMember.getHost(),
                                 nodeMember.getPort());
-                        log.error("[{}]: Error: {}", node.getName(), e.getMessage());
                     }
                 });
 
