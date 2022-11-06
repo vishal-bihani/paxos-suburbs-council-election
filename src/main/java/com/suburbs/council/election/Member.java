@@ -14,8 +14,6 @@ public class Member {
 
     private String name;
 
-    private int rank;
-
     private String host;
 
     private int port;
@@ -51,7 +49,6 @@ public class Member {
 
         this.id = id;
         this.name = name;
-        this.rank = rank;
         this.host = host;
         this.port = port;
     }
@@ -66,14 +63,6 @@ public class Member {
 
     public void setName(String name) {
         this.name = name;
-    }
-
-    public int getRank() {
-        return rank;
-    }
-
-    public void setRank(int rank) {
-        this.rank = rank;
     }
 
     public String getHost() {
@@ -121,7 +110,6 @@ public class Member {
         return "MemberConfiguration{" +
                 "id=" + id +
                 ", name='" + name + '\'' +
-                ", rank=" + rank +
                 ", host='" + host + '\'' +
                 ", port=" + port +
                 '}';
