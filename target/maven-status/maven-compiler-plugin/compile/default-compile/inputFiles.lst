@@ -8,11 +8,11 @@
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/messages/Prepare.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/Member.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/messages/Accept.java
-/home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/utils/Utils.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/messages/Message.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/messages/Reject.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/enums/ResponseTiming.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/Node.java
+/home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/utils/PaxosUtils.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/utils/ConfigurationUtil.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/paxos/Candidate.java
 /home/vishal/Documents/paxos-suburbs-council-election/src/main/java/com/suburbs/council/election/paxos/Server.java

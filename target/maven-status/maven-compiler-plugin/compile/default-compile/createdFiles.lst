@@ -4,6 +4,7 @@ com/suburbs/council/election/paxos/Candidate$1.class
 com/suburbs/council/election/paxos/service/MonitoringService.class
 com/suburbs/council/election/paxos/Server$RequestHandler.class
 com/suburbs/council/election/messages/Prepare.class
+com/suburbs/council/election/utils/PaxosUtils.class
 com/suburbs/council/election/paxos/Server$1.class
 com/suburbs/council/election/paxos/Follower.class
 com/suburbs/council/election/paxos/PaxosDriver.class
@@ -21,7 +22,6 @@ com/suburbs/council/election/messages/Reject.class
 com/suburbs/council/election/messages/Message$Type.class
 com/suburbs/council/election/messages/Accept.class
 com/suburbs/council/election/paxos/Server.class
-com/suburbs/council/election/utils/Utils.class
 com/suburbs/council/election/messages/Message.class
 com/suburbs/council/election/paxos/PaxosMember.class
 com/suburbs/council/election/enums/Phase.class

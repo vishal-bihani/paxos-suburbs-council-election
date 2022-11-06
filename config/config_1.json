@@ -1,7 +1,7 @@
 {
   "id": 1,
   "name": "Member 1",
-  "initProposeDelayMs": 0,
+  "initProposeDelay": 22,
   "port": 8081,
   "responseTiming": "IMMEDIATE",
   "profile": "CANDIDATE",

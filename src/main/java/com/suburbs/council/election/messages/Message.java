@@ -6,6 +6,7 @@ import java.io.Serializable;
  * Messages are communicated between member nodes.
  */
 public interface Message extends Serializable {
+    public static final String MESSAGE_TYPE_KEY = "messageType";
 
     /**
      * Get the type of the message.

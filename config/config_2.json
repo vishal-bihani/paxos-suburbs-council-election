@@ -1,10 +1,10 @@
 {
   "id": 2,
   "name": "Member 2",
-  "initProposeDelayMs": 0,
+  "initProposeDelay": 20,
   "port": 8082,
   "responseTiming": "IMMEDIATE",
-  "profile": "FOLLOWER",
+  "profile": "CANDIDATE",
   "members": [
     {
       "id": 1,

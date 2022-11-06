@@ -1,9 +1,11 @@
 package com.suburbs.council.election.enums;
 
+/**
+ * Profile is used to distinguish members who are willing to
+ * participate in election from members who do not.
+ */
 public enum Profile {
 
-    LEADER,
     CANDIDATE,
-    FOLLOWER
-
+    FOLLOWER // All Candidates are also a follower
 }

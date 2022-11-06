@@ -2,60 +2,83 @@ package com.suburbs.council.election.paxos;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.suburbs.council.election.messages.*;
-import com.suburbs.council.election.utils.Utils;
+import com.suburbs.council.election.utils.PaxosUtils;
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Follower is a Member who will not initiate or participate in election. Follower
+ * can only vote.
+ */
 public class Follower extends PaxosMember {
     private static final Logger log = LoggerFactory.getLogger(Follower.class);
 
     private final Context context;
+    private final BlockingQueue<String> receivedMessages;
 
+    /**
+     * Constructor.
+     *
+     * @param context Context object holds the resources which are shared among all the threads
+     */
     public Follower(Context context) {
         this.context = context;
+        this.receivedMessages = context.getReceivedMessages();
     }
 
     @Override
     public void run() {
         while (!Thread.interrupted()) {
+            handleRequests();
+        }
+    }
 
-            BlockingQueue<String> receivedMessages = context.getReceivedMessages();
-            while(!context.getReceivedMessages().isEmpty()) {
+    /**
+     * Polls the queued messages and dispatches them to their handlers
+     */
+    private void handleRequests() {
+        while(!receivedMessages.isEmpty()) {
+            try {
+                String message = receivedMessages.poll();
+                Message.Type messageType;
                 try {
+                    // Get the message type
+                    messageType = PaxosUtils.getMessageType(message);
 
-                    String message = receivedMessages.poll();
-                    Message.Type messageType;
-                    try {
-                        messageType = Utils.getMessageType(message);
-
-                    } catch (JsonProcessingException e) {
-                        log.error("[{}]: Error processing message with exception: {}",
-                                context.getNodeName(), e.getMessage());
-
-                        continue;
-                    }
-
-                    switch (messageType) {
-                        case PREPARE -> handlePrepareMessage(message);
-                        case ACCEPT -> handleAcceptMessage(message);
-                        case ACCEPTED -> handleAcceptedMessage(message);
-                    }
-                } catch (Exception e) {
-                    log.error("[{}]: Error handling message with exception: {}",
+                } catch (JsonProcessingException e) {
+                    log.error("[{}]: Error processing message with exception: {}",
                             context.getNodeName(), e.getMessage());
+                    continue;
                 }
+
+                // Dispatch the messages to their handlers
+                switch (messageType) {
+                    case PREPARE -> handlePrepareMessage(message);
+                    case ACCEPT -> handleAcceptMessage(message);
+                    case ACCEPTED -> handleAcceptedMessage(message);
+                }
+
+            } catch (Exception e) {
+                log.error("[{}]: Error handling message with exception: {}",
+                        context.getNodeName(), e.getMessage());
             }
         }
     }
 
+    /**
+     * Handles {@link Prepare} messages received from Proposer.
+     *
+     * @param message Prepare message
+     * @throws JsonProcessingException Thrown if it encounters error while deserialization
+     */
     public void handlePrepareMessage(String message) throws JsonProcessingException {
-        Prepare prepare = Utils.deserialize(message, Prepare.class);
+        Prepare prepare = PaxosUtils.deserialize(message, Prepare.class);
         log.info("[{}]: Received prepare message from member: {}",
                 context.getNodeName(), prepare.getProposerNodeName());
 
-        long prepareMessageId = Utils.parsePrepareNumer(
+        long prepareMessageId = PaxosUtils.parsePrepareNumer(
                 prepare.getNewPrepareMessageId()
         );
 
@@ -93,6 +116,12 @@ public class Follower extends PaxosMember {
         dispatchPromiseMessageToProposer(promise.getProposerNodeId(), promise);
     }
 
+    /**
+     * Dispatches {@link Reject} message to the Proposer.
+     *
+     * @param proposerNodeId Node id of the proposer
+     * @param reject Reject message to dispatch
+     */
     private void dispatchRejectMessageToProposer(int proposerNodeId, Reject reject) {
         context.getMembers()
                 .forEach(member -> {
@@ -102,7 +131,7 @@ public class Follower extends PaxosMember {
                     try {
                         log.info("[{}]: Dispatching REJECT message to {}", context.getNodeName(),
                                 member.getName());
-                        Utils.dispatch(member, reject);
+                        PaxosUtils.dispatch(member, reject);
 
                     } catch (IOException e) {
                         log.error("[{}]: Error dispatching REJECT message for prepare message id: {}",
@@ -111,6 +140,12 @@ public class Follower extends PaxosMember {
                 });
     }
 
+    /**
+     * Dispatches {@link Promise} message to the Proposer.
+     *
+     * @param proposerNodeId Node id of the Proposer
+     * @param promise Promise message to dispatch
+     */
     private void dispatchPromiseMessageToProposer(int proposerNodeId, Promise promise) {
         context.getMembers()
                 .forEach(member -> {
@@ -120,7 +155,7 @@ public class Follower extends PaxosMember {
                     try {
                         log.info("[{}]: Dispatching PROMISE message to {}", context.getNodeName(),
                                 member.getName());
-                        Utils.dispatch(member, promise);
+                        PaxosUtils.dispatch(member, promise);
 
                     } catch (IOException e) {
                         log.error("[{}]: Error dispatching PROMISE message for prepare message id: {}",
@@ -129,8 +164,14 @@ public class Follower extends PaxosMember {
                 });
     }
 
+    /**
+     * Handles {@link Accept} message from Proposer.
+     *
+     * @param message Accept message to dispatch
+     * @throws JsonProcessingException Thrown if it encounters error while deserialization
+     */
     public void handleAcceptMessage(String message) throws JsonProcessingException {
-        Accept accept = Utils.deserialize(message, Accept.class);
+        Accept accept = PaxosUtils.deserialize(message, Accept.class);
         log.info("[{}]: Received accept message from member: {}",
                 context.getNodeName(), accept.getProposerNodeName());
 
@@ -138,7 +179,7 @@ public class Follower extends PaxosMember {
         if (!accept.getPrepareMessageId().equals(context.getLastPrepareMessageIdWithNodeId())) {
             // It's another prepare message.
 
-            long receivedPrepareMessageId = Utils.parsePrepareNumer(
+            long receivedPrepareMessageId = PaxosUtils.parsePrepareNumer(
                     accept.getPrepareMessageId()
             );
             if (!isHighestPrepareMessageId(receivedPrepareMessageId)) {
@@ -156,7 +197,7 @@ public class Follower extends PaxosMember {
         Accepted accepted = new Accepted(context, accept.getPrepareMessageId(), context.getLastPrepareMessage());
         broadcastAcceptedMessage(accepted);
 
-        long prepareMessageId = Utils.parsePrepareNumer(
+        long prepareMessageId = PaxosUtils.parsePrepareNumer(
                 accept.getPrepareMessageId());
 
         context.incrementVotesForPrepare(prepareMessageId);
@@ -169,13 +210,18 @@ public class Follower extends PaxosMember {
         }
     }
 
+    /**
+     * Broadcasts {@link Accepted} messages to all the Members.
+     *
+     * @param accepted Accepted message to broadcast
+     */
     public void broadcastAcceptedMessage(Accepted accepted) {
         context.getMembers()
                 .forEach(member -> {
                     try {
                         log.info("[{}]: Dispatching ACCEPTED message to {}", context.getNodeName(),
                                 member.getName());
-                        Utils.dispatch(member, accepted);
+                        PaxosUtils.dispatch(member, accepted);
 
                     } catch (IOException e) {
                         log.error("[{}]: Error dispatching ACCEPTED message for prepare message id: {}",
@@ -184,16 +230,26 @@ public class Follower extends PaxosMember {
                 });
     }
 
-    private void handleAcceptedMessage(String message) throws JsonProcessingException {
-        Accepted accepted = Utils.deserialize(message, Accepted.class);
+    /**
+     * Handles all the {@link Accepted} messages received from the members.
+     *
+     * @param message Accept message
+     * @throws JsonProcessingException Throws if encounters any error while deserialization
+     */
+    public void handleAcceptedMessage(String message) throws JsonProcessingException {
+        Accepted accepted = PaxosUtils.deserialize(message, Accepted.class);
         log.info("[{}]: Received ACCEPTED message from member: {}",
                 context.getNodeName(), accepted.getResponderNodeName());
 
-        long prepareMessageId = Utils.parsePrepareNumer(
+        // Parse the identifier
+        long prepareMessageId = PaxosUtils.parsePrepareNumer(
                 accepted.getPrepareMessageId()
         );
 
+        // Increment total no. of votes for the identifier
         context.incrementVotesForPrepare(prepareMessageId);
+
+        // Check if Majority is achieved. If yes, update the state
         if (context.isMajorityVotesReceived(prepareMessageId)) {
             context.updateState(
                     accepted.getProposedPrepareMessage()
@@ -203,6 +259,13 @@ public class Follower extends PaxosMember {
         }
     }
 
+    /**
+     * Checks if received number part of the identifier is higher than the existing
+     * prepare message id.
+     *
+     * @param prepareMessageId Identifier of the received Prepare message
+     * @return Is it higher than existing ids
+     */
     private boolean isHighestPrepareMessageId(long prepareMessageId) {
         return prepareMessageId > context.getLastPrepareMessageId();
     }

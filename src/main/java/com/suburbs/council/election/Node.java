@@ -23,11 +23,11 @@ public class Node {
 
     private List<Member> members;
 
-    private long initProposeDelayMs;
+    private int initProposeDelay;
 
     public Node(int id, String name, int rank, ResponseTiming responseTiming,
                 Profile profile, List<Member> members,
-                long initProposeDelayMs) {
+                int initProposeDelay) {
 
         this.id = id;
         this.name = name;
@@ -35,7 +35,7 @@ public class Node {
         this.responseTiming = responseTiming;
         this.profile = profile;
         this.members = members;
-        this.initProposeDelayMs = initProposeDelayMs;
+        this.initProposeDelay = initProposeDelay;
     }
 
     // No-Arg constructor for jackson library
@@ -82,12 +82,12 @@ public class Node {
         this.members = members;
     }
 
-    public long getInitProposeDelayMs() {
-        return initProposeDelayMs;
+    public int getInitProposeDelay() {
+        return initProposeDelay;
     }
 
-    public void setInitProposeDelayMs(long initProposeDelayMs) {
-        this.initProposeDelayMs = initProposeDelayMs;
+    public void setInitProposeDelay(int initProposeDelay) {
+        this.initProposeDelay = initProposeDelay;
     }
 
     public int getPort() {
@@ -116,7 +116,7 @@ public class Node {
                 ", profile=" + profile +
                 ", port=" + port +
                 ", memberConfiguration=" + members +
-                ", initProposeDelayMs=" + initProposeDelayMs +
+                ", initProposeDelay=" + initProposeDelay +
                 '}';
     }
 }

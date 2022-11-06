@@ -2,6 +2,11 @@ package com.suburbs.council.election.messages;
 
 import com.suburbs.council.election.paxos.Context;
 
+/**
+ * Reject message is send by the Member to Proposer either during the
+ * Prepare phase (if the Prepare message identifier is invalid) or during
+ * the Accept phase rejecting the Proposed change.
+ */
 public class Reject implements Message {
 
     private int responderNodeId;
@@ -9,6 +14,13 @@ public class Reject implements Message {
     private long currentPrepareMessageId;
     private String proposedPrepareMessageId;
 
+    /**
+     * Constructor.
+     *
+     * @param context Context object holds the resources which are shared among all the threads
+     * @param currentPrepareMessageId Current number part of the Prepare identifier
+     * @param proposedPrepareMessageId Identifier of the proposed Prepare message
+     */
     public Reject(Context context, long currentPrepareMessageId, String proposedPrepareMessageId) {
         this.messageType = Type.REJECT;
 
@@ -17,6 +29,7 @@ public class Reject implements Message {
         this.proposedPrepareMessageId = proposedPrepareMessageId;
     }
 
+    // No-arg constructor used by Jackson
     public Reject() {
     }
 

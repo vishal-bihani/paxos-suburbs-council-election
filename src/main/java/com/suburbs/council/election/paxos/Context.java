@@ -7,14 +7,13 @@ import com.suburbs.council.election.Node;
 import com.suburbs.council.election.messages.HeartBeat;
 import com.suburbs.council.election.messages.Prepare;
 import com.suburbs.council.election.paxos.service.MonitoringService;
+import com.suburbs.council.election.utils.PaxosUtils;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-
-import com.suburbs.council.election.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -169,7 +168,7 @@ public class Context {
     }
 
     public String getNewProposalNumber() {
-        return Utils.generatePrepareNumber(lastPrepareMessageId, node.getId());
+        return PaxosUtils.generatePrepareNumber(lastPrepareMessageId, node.getId());
     }
 
     public void putIncomingMessageToQueue(String incomingMessage) throws InterruptedException {
@@ -280,5 +279,9 @@ public class Context {
 
     public String getCurrentState() {
         return state;
+    }
+
+    public int getInitProposeDelay() {
+        return node.getInitProposeDelay();
     }
 }

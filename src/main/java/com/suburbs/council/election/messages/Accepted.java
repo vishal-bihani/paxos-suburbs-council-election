@@ -2,6 +2,10 @@ package com.suburbs.council.election.messages;
 
 import com.suburbs.council.election.paxos.Context;
 
+/**
+ * Accepted message is sent by the Member back to the Proposer
+ * indicating that they have accepted the proposed state.
+ */
 public class Accepted implements Message {
 
     private Type messageType;
@@ -10,6 +14,13 @@ public class Accepted implements Message {
     private String prepareMessageId;
     private Prepare proposedPrepareMessage;
 
+    /**
+     * Constructor.
+     *
+     * @param context Context object holds the resources which are shared among all the threads
+     * @param prepareMessageId Identifier of the PREPARE message
+     * @param proposedPrepareMessage Original {@link Prepare} message with the {@link Proposal}
+     */
     public Accepted(Context context, String prepareMessageId, Prepare proposedPrepareMessage) {
         this.messageType = Type.ACCEPTED;
 
@@ -19,6 +30,7 @@ public class Accepted implements Message {
         this.proposedPrepareMessage = proposedPrepareMessage;
     }
 
+    // No-args constructor used by Jackson
     public Accepted() {
     }
 

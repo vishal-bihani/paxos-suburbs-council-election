@@ -2,6 +2,9 @@ package com.suburbs.council.election.messages;
 
 import com.suburbs.council.election.paxos.Context;
 
+/**
+ * Prepare message sent by the Proposer to all Members to initiate an election.
+ */
 public class Prepare implements Message {
 
     private int proposerNodeId;
@@ -10,6 +13,11 @@ public class Prepare implements Message {
     private Proposal proposal;
     private String newPrepareMessageId;
 
+    /**
+     * Constructor.
+     *
+     * @param context Context object holds the resources which are shared among all the threads
+     */
     public Prepare(Context context) {
         this.messageType = Type.PREPARE;
 
@@ -19,6 +27,7 @@ public class Prepare implements Message {
         this.newPrepareMessageId = context.getNewProposalNumber();
     }
 
+    // No-args constructor used by Jackson
     public Prepare() {
     }
 

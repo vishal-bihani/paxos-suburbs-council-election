@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * This is responsible for monitoring the connectivity status between the current node
- * and the member nodes.
+ * and the member nodes. It sends and receives heartbeat to other members.
  */
 public class MonitoringService extends Thread {
     private static final Logger log = LoggerFactory.getLogger(MonitoringService.class);
@@ -61,22 +61,20 @@ public class MonitoringService extends Thread {
             // Iterate over the members and send heartbeat.
             context.getMembers()
                     .forEach(member -> {
-//
+
                         // If connection is not active, attempt to start a new connection
                         try {
                             if (!member.isConnected())
                                 member.initializeSocket();
-//
+
                             sendHeartBeat(member.socket());
-//
+
                         } catch (IOException e) {
                             log.error("[{}]: Error initializing socket to host: {} and port: {}",
                                     context.getNodeName(),
                                     member.getHost(),
                                     member.getPort());
                         }
-//
-//                        log.info("[{}]: ");
                     });
 
             // Poll received heartbeat messages
@@ -121,6 +119,9 @@ public class MonitoringService extends Thread {
         out.close();
     }
 
+    /**
+     * Poll the buffered heartbeats received from other members.
+     */
     public void pollHeartBeat() {
 
         List<HeartBeat> messages = context.pollHeartBeatMessage();
@@ -128,7 +129,7 @@ public class MonitoringService extends Thread {
 
         messages.forEach(heartbeat -> log.info("[{}]: Received heartbeat from member {}",
                 context.getNodeName(),
-                ((HeartBeat) heartbeat).getName())
+                (heartbeat).getName())
         );
     }
 }

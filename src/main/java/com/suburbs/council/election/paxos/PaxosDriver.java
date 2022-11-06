@@ -34,6 +34,7 @@ public class PaxosDriver {
                     + node.getProfile());
         }
 
+        // Initialize sockets.
         this.members
                 .forEach(nodeMember -> {
                     try {
@@ -52,6 +53,11 @@ public class PaxosDriver {
 
     }
 
+    /**
+     * Starts multiple services running on separate threads.
+     *
+     * @throws IOException If encounters any IO exception
+     */
     public void start() throws IOException {
         startServer();
         startMonitoringService();
@@ -80,6 +86,9 @@ public class PaxosDriver {
         server.start();
     }
 
+    /**
+     * Start {@link PaxosMember} that handles Paxos related operations.
+     */
     private void startPaxosMember() {
         member.start();
     }

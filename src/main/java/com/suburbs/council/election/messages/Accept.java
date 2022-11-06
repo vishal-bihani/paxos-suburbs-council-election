@@ -2,6 +2,10 @@ package com.suburbs.council.election.messages;
 
 import com.suburbs.council.election.paxos.Context;
 
+/**
+ * Accept messages are sent by Proposer requesting other members
+ * to fulfill their Promise, accept the proposed state and come to consensus.
+ */
 public class Accept implements Message {
 
     private Type messageType;
@@ -9,6 +13,12 @@ public class Accept implements Message {
     private String proposerNodeName;
     private String prepareMessageId;
 
+    /**
+     * Constructor.
+     *
+     * @param context Context object holds the resources which are shared among all the threads
+     * @param prepareMessageId Identifier of the PREPARE message
+     */
     public Accept(Context context, String prepareMessageId) {
         this.messageType = Type.ACCEPT;
 
@@ -17,6 +27,7 @@ public class Accept implements Message {
         this.prepareMessageId = prepareMessageId;
     }
 
+    // No-Arg constructor Used by the Jackson
     public Accept() {
     }
 

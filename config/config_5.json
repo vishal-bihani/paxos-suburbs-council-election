@@ -1,7 +1,7 @@
 {
   "id": 5,
   "name": "Member 5",
-  "initProposeDelayMs": 0,
+  "initProposeDelay": 0,
   "port": 8085,
   "responseTiming": "IMMEDIATE",
   "profile": "FOLLOWER",
