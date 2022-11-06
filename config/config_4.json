@@ -1,0 +1,52 @@
+{
+  "id": 4,
+  "name": "Member 4",
+  "initProposeDelayMs": 0,
+  "port": 8084,
+  "responseTiming": "IMMEDIATE",
+  "profile": "FOLLOWER",
+  "members": [
+    {
+      "id": 1,
+      "name": "Member 1",
+      "rank": 1,
+      "port": 8081,
+      "host": "127.0.0.1"
+    },
+    {
+      "id": 2,
+      "name": "Member 2",
+      "rank": 2,
+      "port": 8082,
+      "host": "127.0.0.1"
+    },
+    {
+      "id": 3,
+      "name": "Member 3",
+      "rank": 3,
+      "port": 8083,
+      "host": "127.0.0.1"
+    },
+    {
+      "id": 4,
+      "name": "Member 4",
+      "rank": 4,
+      "port": 8084,
+      "host": "127.0.0.1"
+    },
+    {
+      "id": 5,
+      "name": "Member 5",
+      "rank": 5,
+      "port": 8085,
+      "host": "127.0.0.1"
+    },
+    {
+      "id": 6,
+      "name": "Member 6",
+      "rank": 6,
+      "port": 8086,
+      "host": "127.0.0.1"
+    }
+  ]
+}
