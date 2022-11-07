@@ -28,6 +28,8 @@ public class Candidate extends Follower {
     private int intervalBetweenInitiatingElection;
     private final BlockingQueue<String> receivedMessages;
 
+    private boolean dispatchedAcceptMessages;
+
     /**
      * Constructor.
      *
@@ -42,6 +44,8 @@ public class Candidate extends Follower {
 
         this.receivedMessages = context.getReceivedMessages();
         this.responseTiming = context.getResponseTiming();
+
+        this.dispatchedAcceptMessages = false;
     }
 
     @Override
@@ -63,7 +67,8 @@ public class Candidate extends Follower {
     /**
      * Polls the queued messages and dispatches them to their handlers
      */
-    private void handleRequests() {
+    @Override
+    public void handleRequests() {
         while(!receivedMessages.isEmpty()) {
 
             // If response timing is set to be either of MEDIUM, LATE, NEVER, the thread
@@ -104,7 +109,8 @@ public class Candidate extends Follower {
      * Delays the execution as per the configuration of {@link ResponseTiming}
      * in {@link com.suburbs.council.election.Node}.
      */
-    private void delayResponseIfConfigured() {
+    @Override
+    public void delayResponseIfConfigured() {
         long responseDelay = responseTiming.getResponseDelay();
 
         if (responseDelay > 0) {
@@ -115,7 +121,6 @@ public class Candidate extends Follower {
                         responseDelay);
 
                 Thread.sleep(responseDelay);
-//                receivedMessages.clear();
 
             } catch (InterruptedException e) {
                 log.error("[{}]: Delay interrupted", context.getNodeName());
@@ -160,11 +165,18 @@ public class Candidate extends Follower {
             return;
         }
 
+        // If Accept messages are already dispatched. Then DO NOT
+        // re-dispatch it.
+        if (dispatchedAcceptMessages) {
+            return;
+        }
+
         log.info("Majority promises received for id: {}, time to dispatch accept messages",
                 promise.getPrepareMessageId());
 
         Accept accept = new Accept(context, promise.getPrepareMessageId());
         broadcastAcceptMessage(accept);
+        dispatchedAcceptMessages = true;
     }
 
     /**
@@ -214,6 +226,10 @@ public class Candidate extends Follower {
      * Initiates new election by broadcasting {@link Prepare} message.
      */
     private void initiateElection() {
+
+        // Needed to handle multiple dispatches with each increasing vote over majority mark.
+        this.dispatchedAcceptMessages = false;
+
         try {
             // Initiate election
             log.info("[{}]: Satisfied propose delay condition. Now initiating new election",

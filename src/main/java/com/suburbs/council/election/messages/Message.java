@@ -18,9 +18,11 @@ public interface Message extends Serializable {
     enum Type {
         HEARTBEAT,
         PREPARE,
+        PREPROMISE,
         PROMISE,
         ACCEPT,
         REJECT,
+        PREACCEPTED,
         ACCEPTED
     }
 }

@@ -41,7 +41,7 @@ public class Follower extends PaxosMember {
     /**
      * Polls the queued messages and dispatches them to their handlers
      */
-    private void handleRequests() {
+    public void handleRequests() {
         while(!receivedMessages.isEmpty()) {
 
             // If response timing is set to be either of MEDIUM, LATE, NEVER, the thread
@@ -79,7 +79,7 @@ public class Follower extends PaxosMember {
      * Delays the execution as per the configuration of {@link ResponseTiming}
      * in {@link com.suburbs.council.election.Node}.
      */
-    private void delayResponseIfConfigured() {
+    public void delayResponseIfConfigured() {
         long responseDelay = responseTiming.getResponseDelay();
 
         if (responseDelay > 0) {
@@ -90,7 +90,6 @@ public class Follower extends PaxosMember {
                         responseDelay);
 
                 Thread.sleep(responseDelay);
-//                receivedMessages.clear();
 
             } catch (InterruptedException e) {
                 log.error("[{}]: Delay interrupted", context.getNodeName());
