@@ -55,12 +55,29 @@ To run and simulate the election follow the below steps:
 3. Paxos implementation should work when all them members have various `PROFILES` and few `CANDIDATES`
 stops or disconnects after `PREPARE` phase
 4. Few things to observe in logs to confirm that algorithm works:
-   5. All the nodes must have same state (eventually after some delay due to different response times)
-   6. All the `PREPARE`, `PROMISE`, `REJECT`, `ACCEPT`, `ACCEPTED` phases are properly logged from which node to which node.
-   7. Nodes with `LATE` response times eventually becomes consistent with other members
-8. All the methods in the code is documented for better understanding of the flow
-9. Paxos algorithm works with `N` number of nodes with all the 4 response time categories
 
-   > Important node: All the nodes send `heartbeats` to each other. For keeping logs clean only 
-   > `info` logs are displayed. To view the `heartbeats` please change the log level from `trace`
-   > to `info` in the source code.
+   a. All the nodes must have same state (eventually after some delay due to different response times)
+   
+   b. All the `PREPARE`, `PREPROMISE,` `PROMISE`, `REJECT`, `ACCEPT`, `PREACCEPTED`, `ACCEPTED` phases are properly logged from which node to which node.
+   
+   c. Nodes with `LATE` response times eventually becomes consistent with other members
+
+5. All the methods in the code is documented for better understanding of the flow
+6. Paxos algorithm works with `N` number of nodes with all the 4 response time categories
+7. Fast Byzantine Paxos implementation that works when members lie, collude, or intentionally do
+   not participate in some voting queries but participate in others
+   
+   a. Confirmation regarding working of Byzantine algorithm can be made by observing logs.
+   
+   b. As per the algorithm, to handle `M` byzantine faults you need to have minimum of 5M+1 nodes.
+
+   c. If a malicious candidate lies, it won't be taken into consideration as majority is achieved by correct nodes.
+
+   d. If a malicious candidate does not participate does not participate, consensus will still be achieved as no. of correct nodes are in majority.
+
+   e. `PREPROMISE` and `PREACCEPT` messages are used to majority votes on the intention of the proposer, so if
+the malicious node tries to corrupt the state, it can't because the majority will never be achieved.
+
+   >       Important node: All the nodes send `heartbeats` to each other. For keeping logs clean only 
+   >       `info` logs are displayed. To view the `heartbeats` please change the log level from `trace`
+   >       to `info` in the source code.
