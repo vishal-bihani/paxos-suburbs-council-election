@@ -32,6 +32,7 @@ public class Context {
     private int totalNodes;
     private int majorityNumber;
     private Long lastPrepareMessageId = 0L;
+    private int totalByzantineFaultsSupported;
     private String currentAcceptedPrepareMessageId;
     private MonitoringService monitoringService;
     private String lastPrepareMessageIdWithNodeId;
@@ -54,7 +55,7 @@ public class Context {
         this.node = node;
         this.members = members;
 
-        state = null;
+        state = "Election yet to happen";
         mapper = new ObjectMapper();
         votesPerPrepare = new HashMap<>();
         promisesPerPrepare = new HashMap<>();
@@ -67,7 +68,25 @@ public class Context {
         // Update the total number of nodes, as per the configuration file and
         // calculate the number of nodes needed for majority votes.
         updateTotalNumberOfNodes();
+        calculateTotalNumberOfByzantineFaultsSupported();
         calculateMajorityNumber();
+    }
+
+    /**
+     * As per Fast Byzantine paxos algorithm <pre><code>N >= 5M + 1</code></pre>
+     * where N is the number of nodes and M is total number of byzantine faults.
+     *
+     * Assuming all the members as acceptors this will calculate total no. of
+     * byzantine faults.
+     */
+    private void calculateTotalNumberOfByzantineFaultsSupported() {
+
+        // The formula is (Total no. of members including proposer - 1) / 5 >= Byzantine faults.
+        this.totalByzantineFaultsSupported = (int) ((totalNodes - 1) / 5);
+
+        log.info("[{}]: Following assumption is being made that (proposers >= 3f + 1)", getNodeName());
+        log.info("[{}]: Total no. of byzantine faults that can be supported is {}",
+                getNodeName(), totalByzantineFaultsSupported);
     }
 
     /**
@@ -91,7 +110,18 @@ public class Context {
      * Calculate number of nodes/responses needed for majority.
      */
     private void calculateMajorityNumber() {
-        majorityNumber = (totalNodes / 2) + 1;
+        // As per Fast Byzantine Paxos the formula for majority number is
+        // votes >= (a + 3f + 1) / 2
+        majorityNumber = (int) ((totalNodes + (3 * totalByzantineFaultsSupported) + 1) / 2);
+    }
+
+    /**
+     * Returns the majority number.
+     *
+     * @return Majority number needed
+     */
+    public int getMajorityNumber() {
+        return this.majorityNumber;
     }
 
     /**
@@ -168,14 +198,31 @@ public class Context {
         return Collections.emptyList();
     }
 
+    /**
+     * Generate new message id.
+     *
+     * @return new message id
+     */
     public String getNewProposalNumber() {
         return PaxosUtils.generatePrepareNumber(lastPrepareMessageId, node.getId());
     }
 
+    /**
+     * Queues the incoming message. This will be polled by request handler.
+     *
+     * @param incomingMessage Incoming message
+     * @throws InterruptedException Thrown if exception occurs
+     */
     public void putIncomingMessageToQueue(String incomingMessage) throws InterruptedException {
         receivedMessages.put(incomingMessage);
     }
 
+    /**
+     * Saves given prepare message
+     *
+     * @param prepareMessageNumber message id
+     * @param prepare Prepare message
+     */
     public void savePrepareMessage(Long prepareMessageNumber, Prepare prepare) {
         receivedPrepareMessages.put(prepareMessageNumber, prepare);
 
@@ -183,6 +230,11 @@ public class Context {
         lastPrepareMessageIdWithNodeId = prepare.getNewPrepareMessageId();
     }
 
+    /**
+     * Increment no. of votes received for the message id
+     *
+     * @param prepareMessageNumber message id
+     */
     public void incrementVotesForPrepare(Long prepareMessageNumber) {
 
         if (!votesPerPrepare.containsKey(prepareMessageNumber)) {
@@ -201,6 +253,12 @@ public class Context {
         votesPerPrepare.replace(prepareMessageNumber, currentVotes + 1);
     }
 
+    /**
+     * Get current votes for the message id.
+     *
+     * @param prepareMessageNumber message id
+     * @return no. of votes
+     */
     public int getCurrentVotes(Long prepareMessageNumber) {
         Integer currentVotes = votesPerPrepare.get(prepareMessageNumber);
 
@@ -208,11 +266,22 @@ public class Context {
         return currentVotes;
     }
 
+    /**
+     * Checks if majority votes received.
+     *
+     * @param prepareMessageNumber message id
+     * @return if majority votes received
+     */
     public boolean isMajorityVotesReceived(Long prepareMessageNumber) {
         int currentVotes = getCurrentVotes(prepareMessageNumber);
         return currentVotes >= majorityNumber;
     }
 
+    /**
+     * Increment no. of promises received.
+     *
+     * @param prepareMessageNumber message id
+     */
     public void incrementPromisesForPrepare(Long prepareMessageNumber) {
 
         if (!promisesPerPrepare.containsKey(prepareMessageNumber)) {
@@ -230,6 +299,12 @@ public class Context {
         promisesPerPrepare.replace(prepareMessageNumber, promises + 1);
     }
 
+    /**
+     * Get no. of promises received.
+     *
+     * @param prepareMessageNumber message id
+     * @return no. of promises received
+     */
     public int getCurrentNoOfPromises(Long prepareMessageNumber) {
         Integer currentNumberOfPromises = promisesPerPrepare.get(prepareMessageNumber);
 
@@ -237,55 +312,121 @@ public class Context {
         return currentNumberOfPromises;
     }
 
+    /**
+     * Checks if majority promises received.
+     *
+     * @param prepareMessageNumber Message id
+     * @return is majority promises achieved
+     */
     public boolean isMajorityPromisesReceived(Long prepareMessageNumber) {
         int currentNumberOfPromises = getCurrentNoOfPromises(prepareMessageNumber);
         return currentNumberOfPromises >= majorityNumber;
     }
 
+    /**
+     * Returns queue of received messages.
+     *
+     * @return Queue
+     */
     public BlockingQueue<String> getReceivedMessages() {
         return receivedMessages;
     }
 
+    /**
+     * Returns message id of the last prepare message.
+     *
+     * @return message id
+     */
     public long getLastPrepareMessageId() {
         return lastPrepareMessageId;
     }
 
+    /**
+     * Returns formatted message id of the last saved prepare message.
+     *
+     * @return formatted message id
+     */
     public String getLastPrepareMessageIdWithNodeId() {
         return lastPrepareMessageIdWithNodeId;
     }
 
+    /**
+     * Set message id of the last saved prepare message.
+     *
+     * @param prepareMessageId message id
+     */
     public void setLastPrepareMessageId(long prepareMessageId) {
         this.lastPrepareMessageId = prepareMessageId;
     }
 
+    /**
+     * Get formatted message id of the last saved prepare message.
+     *
+     * @param prepareMessageIdWithNodeId Formatted message id
+     */
     public void setLastPrepareMessageIdWithNodeId(String prepareMessageIdWithNodeId) {
         this.lastPrepareMessageIdWithNodeId = prepareMessageIdWithNodeId;
     }
 
+    /**
+     * Get last saved prepare message
+     *
+     * @return Prepare message
+     */
     public Prepare getLastPrepareMessage() {
         return receivedPrepareMessages.get(lastPrepareMessageId);
     }
 
+    /**
+     * Get message id of the current accepted message.
+     *
+     * @return message id
+     */
     public String getCurrentAcceptedPrepareMessageId() {
         return currentAcceptedPrepareMessageId;
     }
 
+    /**
+     * Set current accepted prepare message id.
+     *
+     * @param currentAcceptedPrepareMessageId message id
+     */
     public void setCurrentAcceptedPrepareMessageId(String currentAcceptedPrepareMessageId) {
         this.currentAcceptedPrepareMessageId = currentAcceptedPrepareMessageId;
     }
 
+    /**
+     * Update state.
+     *
+     * @param state updated state
+     */
     public void updateState(String state) {
         this.state = state;
     }
 
+    /**
+     * Get current state.
+     *
+     * @return state
+     */
     public String getCurrentState() {
         return state;
     }
 
+    /**
+     * Get configured initial delay for initiating election
+     *
+     * @return delay
+     */
     public int getInitProposeDelay() {
         return node.getInitProposeDelay();
     }
 
+    /**
+     * Get {@link ResponseTiming} category
+     *
+     * @return ResponseTiming
+     */
     public ResponseTiming getResponseTiming() {
         return node.getResponseTiming();
     }

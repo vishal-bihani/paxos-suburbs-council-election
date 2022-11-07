@@ -134,7 +134,7 @@ public class Candidate extends Follower {
      * @param message Promise message
      * @throws JsonProcessingException Throws if encounters any error while deserialization
      */
-    private void handlePromiseMessages(String message) throws JsonProcessingException {
+    public void handlePromiseMessages(String message) throws JsonProcessingException {
         Promise promise = PaxosUtils.deserialize(message, Promise.class);
         log.info("[{}]: Received promise message from member: {} for id: {}",
                 context.getNodeName(), promise.getResponderNodeName(), promise.getPrepareMessageId());
