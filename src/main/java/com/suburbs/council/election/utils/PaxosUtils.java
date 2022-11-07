@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.suburbs.council.election.Member;
 import com.suburbs.council.election.messages.Message;
 import com.suburbs.council.election.paxos.Candidate;
-
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;

@@ -5,6 +5,8 @@ import com.suburbs.council.election.enums.ResponseTiming;
 import com.suburbs.council.election.messages.*;
 import com.suburbs.council.election.utils.PaxosUtils;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,8 +19,15 @@ public class Follower extends PaxosMember {
     private static final Logger log = LoggerFactory.getLogger(Follower.class);
 
     private final Context context;
+    private final int majorityNumber;
     private final ResponseTiming responseTiming;
     private final BlockingQueue<String> receivedMessages;
+    private final Map<Long, Prepare> savedPrepareMessages;
+    private final Map<Long, Integer> numberOfPrePromiseMessages;
+    private final Map<Long, Integer> numberOfPreAcceptMessages;
+
+    private final Map<Long, Boolean> dispatchedPromiseMessages;
+    private final Map<Long, Boolean> dispatchedAcceptedMessages;
 
     /**
      * Constructor.
@@ -27,8 +36,16 @@ public class Follower extends PaxosMember {
      */
     public Follower(Context context) {
         this.context = context;
+        this.majorityNumber = context.getMajorityNumber();
         this.receivedMessages = context.getReceivedMessages();
         this.responseTiming = context.getResponseTiming();
+
+        this.savedPrepareMessages = new HashMap<>();
+        this.numberOfPrePromiseMessages = new HashMap<>();
+        this.numberOfPreAcceptMessages = new HashMap<>();
+
+        this.dispatchedPromiseMessages = new HashMap<>();
+        this.dispatchedAcceptedMessages = new HashMap<>();
     }
 
     @Override
@@ -66,6 +83,8 @@ public class Follower extends PaxosMember {
                     case PREPARE -> handlePrepareMessage(message);
                     case ACCEPT -> handleAcceptMessage(message);
                     case ACCEPTED -> handleAcceptedMessage(message);
+                    case PREPROMISE -> handlePrePromiseMessage(message);
+                    case PREACCEPTED -> handlePreAcceptedMessage(message);
                 }
 
             } catch (Exception e) {
@@ -112,7 +131,6 @@ public class Follower extends PaxosMember {
                 prepare.getNewPrepareMessageId()
         );
 
-
         // Check if higher prepare message ids are already processed
         if (!isHighestPrepareMessageId(prepareMessageId)) {
             // Since it is lower than the already existing message id
@@ -128,22 +146,18 @@ public class Follower extends PaxosMember {
             return;
         }
 
-        // Highest prepare message id. Will save and dispatch promise msg and increment votes.
-        context.savePrepareMessage(prepareMessageId, prepare);
-        Promise promise = new Promise(context, prepare.getNewPrepareMessageId(), prepare.getProposerNodeId());
+        // Byzantine algo comes to effect. Broadcast PrePromise messages.
 
-        // Check if there is any saved prepare message id for which accepted was broadcast but
-        // did not get majority votes yet
-        if (context.getLastPrepareMessageIdWithNodeId() != null && context.getCurrentAcceptedPrepareMessageId() != null) {
-            if (context.getLastPrepareMessageIdWithNodeId().equals(context.getCurrentAcceptedPrepareMessageId())) {
+        PrePromise prePromise = new PrePromise(context, prepare.getNewPrepareMessageId(),
+                prepare.getProposerNodeId(), prepare.getProposal());
 
-                // Add the last prepared message to the promise message
-                promise.setLastPrepareMessage(context.getLastPrepareMessage());
-            }
-        }
+        incrementValue(this.numberOfPrePromiseMessages, prepareMessageId, Message.Type.PREPROMISE,
+                prepare.getNewPrepareMessageId());
 
-        // Dispatch to the proposer
-        dispatchPromiseMessageToProposer(promise.getProposerNodeId(), promise);
+        broadcastPrePromiseMessage(prePromise);
+
+        this.savedPrepareMessages
+                .put(prepareMessageId, prepare);
     }
 
     /**
@@ -211,13 +225,14 @@ public class Follower extends PaxosMember {
         log.info("[{}]: Received accept message from member: {} for id: {}",
                 context.getNodeName(), accept.getProposerNodeName(), accept.getPrepareMessageId());
 
+        long receivedPrepareMessageId = PaxosUtils.parsePrepareNumer(
+                accept.getPrepareMessageId()
+        );
+
         // Check if the accept message is for last proposed prepare message
         if (!accept.getPrepareMessageId().equals(context.getLastPrepareMessageIdWithNodeId())) {
             // It's another prepare message.
 
-            long receivedPrepareMessageId = PaxosUtils.parsePrepareNumer(
-                    accept.getPrepareMessageId()
-            );
             if (!isHighestPrepareMessageId(receivedPrepareMessageId)) {
                 // Prepared message id is lower than existing prepare message id, thus will be rejected.
                 Reject reject = new Reject(context, context.getLastPrepareMessageId(), accept.getPrepareMessageId());
@@ -228,22 +243,13 @@ public class Follower extends PaxosMember {
             return;
         }
 
-        // Including the PREPARE message to update state on those members which were not able to connect with
-        // proposer
-        Accepted accepted = new Accepted(context, accept.getPrepareMessageId(), context.getLastPrepareMessage());
-        broadcastAcceptedMessage(accepted);
+        // Broadcast PreAccepted message.
+        PreAccepted preAccepted = new PreAccepted(context, accept.getPrepareMessageId(), accept.getProposerNodeId());
 
-        long prepareMessageId = PaxosUtils.parsePrepareNumer(
+        incrementValue(this.numberOfPrePromiseMessages, receivedPrepareMessageId, Message.Type.PREACCEPTED,
                 accept.getPrepareMessageId());
 
-        context.incrementVotesForPrepare(prepareMessageId);
-        if (context.isMajorityVotesReceived(prepareMessageId)) {
-            context.updateState(
-                    accepted.getProposedPrepareMessage()
-                            .getProposal()
-                            .getProposedMessage()
-            );
-        }
+        broadcastPreAcceptedMessage(preAccepted);
     }
 
     /**
@@ -265,6 +271,52 @@ public class Follower extends PaxosMember {
                     } catch (IOException e) {
                         log.error("[{}]: Error dispatching ACCEPTED message for prepare message id: {}",
                                 context.getNodeName(), accepted.getPrepareMessageId());
+                    }
+                });
+    }
+
+    /**
+     * Broadcasts {@link PrePromise} messages to all the Members.
+     *
+     * @param prePromise PrePromise message to broadcast
+     */
+    public void broadcastPrePromiseMessage(PrePromise prePromise) {
+        context.getMembers()
+                .forEach(member -> {
+                    try {
+                        log.info("[{}]: Dispatching PREPROMISE message to {} for id: {}",
+                                context.getNodeName(),
+                                member.getName(),
+                                prePromise.getProposedPrepareMessageId());
+
+                        PaxosUtils.dispatch(member, prePromise);
+
+                    } catch (IOException e) {
+                        log.error("[{}]: Error dispatching PREPROMISE message for prepare message id: {}",
+                                context.getNodeName(), prePromise.getProposedPrepareMessageId());
+                    }
+                });
+    }
+
+    /**
+     * Broadcasts {@link PreAccepted} messages to all the Members.
+     *
+     * @param preAccepted PreAccepted message to broadcast
+     */
+    public void broadcastPreAcceptedMessage(PreAccepted preAccepted) {
+        context.getMembers()
+                .forEach(member -> {
+                    try {
+                        log.info("[{}]: Dispatching PREACCEPTED message to {} for id: {}",
+                                context.getNodeName(),
+                                member.getName(),
+                                preAccepted.getProposedPrepareMessageId());
+
+                        PaxosUtils.dispatch(member, preAccepted);
+
+                    } catch (IOException e) {
+                        log.error("[{}]: Error dispatching PREACCEPTED message for prepare message id: {}",
+                                context.getNodeName(), preAccepted.getProposedPrepareMessageId());
                     }
                 });
     }
@@ -293,9 +345,141 @@ public class Follower extends PaxosMember {
             context.updateState(
                     accepted.getProposedPrepareMessage()
                             .getProposal()
-                            .getProposedMessage()
+                            .getProposedMessage() + " for term: " + accepted.getPrepareMessageId()
             );
         }
+    }
+
+    /**
+     * Handles all the {@link PrePromise} messages received from the members.
+     *
+     * @param message PrePromise message
+     * @throws JsonProcessingException Throws if encounters any error while deserialization
+     */
+    public void handlePrePromiseMessage(String message) throws JsonProcessingException {
+        PrePromise prePromise = PaxosUtils.deserialize(message, PrePromise.class);
+        log.info("[{}]: Received PREPROMISE message from member: {} for id: {}",
+                context.getNodeName(), prePromise.getResponderNodeId(), prePromise.getProposedPrepareMessageId());
+
+        // Parse the identifier
+        long prepareMessageId = PaxosUtils.parsePrepareNumer(
+                prePromise.getProposedPrepareMessageId()
+        );
+
+        // Increment total no. of PrePromises for the identifier
+        incrementValue(this.numberOfPrePromiseMessages, prepareMessageId,
+                Message.Type.PREPROMISE, prePromise.getProposedPrepareMessageId());
+
+        // Check if Majority is achieved. If yes, update the state
+        if (!isByzantineMajorityReceived(this.numberOfPrePromiseMessages, prepareMessageId)) {
+            return;
+        }
+
+        log.info("[{}]: Byzantine majority reached for {} with count: {}",
+                context.getNodeName(), Message.Type.PREPROMISE, this.numberOfPrePromiseMessages.get(prepareMessageId));
+
+        // Check if higher prepare message ids are already processed
+        if (!isHighestPrepareMessageId(prepareMessageId)) {
+            // Since it is lower than the already existing message id
+            // send a REJECT message.
+
+            Reject reject = new Reject(context, context.getLastPrepareMessageId(), prePromise.getProposedPrepareMessageId());
+            log.info("[{}]: Message id {} is not higher than existing message id {}, thus will be rejected",
+                    context.getNodeName(),
+                    prePromise.getProposedPrepareMessageId(),
+                    context.getLastPrepareMessageId());
+
+            dispatchRejectMessageToProposer(prePromise.getProposerNodeId(), reject);
+            this.savedPrepareMessages.remove(prepareMessageId);
+            return;
+        }
+
+        Prepare prepare  = this.savedPrepareMessages
+                .get(prepareMessageId);
+
+        if (prepare == null) {
+
+            log.info("[{}]: No PREPARE message from member: {} for message id: {}. Ignoring PREPROMISE",
+                    context.getNodeName(), prePromise.getProposerNodeId(), prePromise.getProposedPrepareMessageId());
+
+            return;
+        }
+
+        context.savePrepareMessage(prepareMessageId, prepare);
+        Promise promise = new Promise(context, prePromise.getProposedPrepareMessageId(),
+                prePromise.getProposerNodeId());
+
+        // Check if there is any saved prepare message id for which accepted was broadcast but
+        // did not get majority votes yet
+        if (context.getLastPrepareMessageIdWithNodeId() != null && context.getCurrentAcceptedPrepareMessageId() != null) {
+            if (context.getLastPrepareMessageIdWithNodeId().equals(context.getCurrentAcceptedPrepareMessageId())) {
+
+                log.info("[{}]: Adding last proposal to PROMISE message to new proposer: {} for message id: {}",
+                        context.getNodeName(), prepare.getProposerNodeName(), promise.getPrepareMessageId());
+
+                // Add the last prepared message to the promise message
+                promise.setLastPrepareMessage(context.getLastPrepareMessage());
+            }
+        }
+
+        if (this.dispatchedPromiseMessages.containsKey(prepareMessageId)
+                && Boolean.TRUE.equals(this.dispatchedPromiseMessages.get(prepareMessageId))) {
+
+
+            log.info("[{}]: Already dispatched PROMISE message to proposer: {} for message id: {}",
+                    context.getNodeName(), prepare.getProposerNodeName(), promise.getPrepareMessageId());
+            return;
+        }
+
+        log.info("[{}]: Dispatching PROMISE message to proposer: {} for message id: {}",
+                context.getNodeName(), prepare.getProposerNodeName(), promise.getPrepareMessageId());
+        // Dispatch to the proposer
+        dispatchPromiseMessageToProposer(promise.getProposerNodeId(), promise);
+        this.dispatchedPromiseMessages.put(prepareMessageId, true);
+    }
+
+    /**
+     * Handles all the {@link PreAccepted} messages received from the members.
+     *
+     * @param message PreAccepted message
+     * @throws JsonProcessingException Throws if encounters any error while deserialization
+     */
+    public void handlePreAcceptedMessage(String message) throws JsonProcessingException {
+        PreAccepted preAccepted = PaxosUtils.deserialize(message, PreAccepted.class);
+        log.info("[{}]: Received PREACCEPTED message from member: {} for id: {}",
+                context.getNodeName(), preAccepted.getProposerNodeId(), preAccepted.getProposedPrepareMessageId());
+
+        // Parse the identifier
+        long prepareMessageId = PaxosUtils.parsePrepareNumer(
+                preAccepted.getProposedPrepareMessageId()
+        );
+
+        // Increment total no. of PrePromises for the identifier
+        incrementValue(this.numberOfPreAcceptMessages, prepareMessageId,
+                Message.Type.PREACCEPTED, preAccepted.getProposedPrepareMessageId());
+
+        // Check if Majority is achieved. If yes, update the state
+        if (!isByzantineMajorityReceived(this.numberOfPrePromiseMessages, prepareMessageId)) {
+            return;
+        }
+
+        if (this.dispatchedAcceptedMessages.containsKey(prepareMessageId)
+                && Boolean.TRUE.equals(this.dispatchedAcceptedMessages.get(prepareMessageId))) {
+
+
+            log.info("[{}]: Already broadcast ACCEPTED message for message id: {}",
+                    context.getNodeName(), preAccepted.getProposedPrepareMessageId());
+            return;
+        }
+
+        // Including the PREPARE message to update state on those members which were not able to connect with
+        // proposer
+        Accepted accepted = new Accepted(context, preAccepted.getProposedPrepareMessageId(),
+                context.getLastPrepareMessage());
+
+        context.incrementVotesForPrepare(prepareMessageId);
+        broadcastAcceptedMessage(accepted);
+        this.dispatchedAcceptedMessages.put(prepareMessageId, true);
     }
 
     /**
@@ -307,5 +491,34 @@ public class Follower extends PaxosMember {
      */
     private boolean isHighestPrepareMessageId(long prepareMessageId) {
         return prepareMessageId > context.getLastPrepareMessageId();
+    }
+
+    /**
+     * Increments value in the given map.
+     *
+     * @param map Map where value will be incremented
+     * @param key Key associated with the value
+     */
+    private void incrementValue(Map<Long, Integer> map, Long key, Message.Type messageType,
+                                String prepareMessageNumber) {
+
+        if (!map.containsKey(key)) {
+            map.put(key, 0);
+        }
+
+        Integer currentValue = map.get(key);
+        currentValue = currentValue == null ? 0 : currentValue;
+
+        log.info("[{}]: Incrementing count for {} id: {} to {}",
+                context.getNodeName(),
+                messageType,
+                prepareMessageNumber,
+                currentValue + 1);
+
+        map.replace(key, currentValue + 1);
+    }
+
+    private boolean isByzantineMajorityReceived(Map<Long, Integer> map, Long key) {
+        return map.get(key) >= majorityNumber;
     }
 }

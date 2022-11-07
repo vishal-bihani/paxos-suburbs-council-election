@@ -1,9 +1,11 @@
 package com.suburbs.council.election.paxos;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.suburbs.council.election.messages.Message;
-import java.io.*;
+import com.suburbs.council.election.utils.PaxosUtils;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
@@ -18,7 +20,7 @@ public class Server extends Thread {
     private static final Logger log = LoggerFactory.getLogger(Server.class);
 
     private static Context context;
-    private ServerSocket serverSocket;
+    private final ServerSocket serverSocket;
 
     /**
      * Constructor.
@@ -59,7 +61,6 @@ public class Server extends Thread {
         private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
 
         private final Socket socket;
-        private final ObjectMapper objectMapper;
 
         /**
          * Constructor.
@@ -68,7 +69,6 @@ public class Server extends Thread {
          */
         public RequestHandler(Socket socket) {
             this.socket = socket;
-            this.objectMapper = new ObjectMapper();
         }
 
         @Override
@@ -87,14 +87,10 @@ public class Server extends Thread {
             }
         }
 
-        private Message convertToMessage(String incomingMessage) throws IOException {
-            return objectMapper.readValue(incomingMessage, Message.class);
-        }
-
         private void dispatchMessage(String incomingMessage) throws InterruptedException, JsonProcessingException {
 
-            Map<String, Object> message = objectMapper.readValue(incomingMessage, Map.class);
-            String messageType = (String) message.get("messageType");
+            Map<String, Object> message = PaxosUtils.deserialize(incomingMessage, Map.class);
+            String messageType = (String) message.get(Message.MESSAGE_TYPE_KEY);
             Message.Type messageTypeEnum = Message.Type.valueOf(messageType);
 
             switch (messageTypeEnum) {
